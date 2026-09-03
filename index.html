@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MG Pasta — Dryer Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg: #14181D;
+    --panel: #1B2027;
+    --panel-alt: #212832;
+    --border: #2E353F;
+    --text: #E7EAEE;
+    --text-muted: #8A94A3;
+    --good: #4FD1A5;
+    --warn: #F2A93B;
+    --alert: #E6555B;
+    --sans: -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SFMono-Regular", "IBM Plex Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    padding:28px 20px 20px;
+    max-width:920px;
+    margin:0 auto;
+  }
+  header h1{
+    font-size:22px;
+    font-weight:600;
+    margin:0 0 4px;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--text-muted);
+    font-size:14px;
+  }
+  .conn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:13px;
+    color:var(--text-muted);
+    margin-top:10px;
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--text-muted);
+    flex-shrink:0;
+  }
+  .dot.good{background:var(--good);}
+  .dot.warn{background:var(--warn);}
+  .dot.alert{background:var(--alert);}
+
+  main{
+    max-width:920px;
+    margin:0 auto;
+    padding:0 20px 60px;
+  }
+
+  .list{
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .row{
+    border-bottom:1px solid var(--border);
+    background:var(--panel);
+  }
+  .row:last-child{border-bottom:none;}
+  .row:nth-child(even){background:var(--panel-alt);}
+
+  .row-main{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:16px 18px;
+    flex-wrap:wrap;
+  }
+  .row-id{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:150px;
+  }
+  .row-id .dot{margin-top:1px;}
+  .row-id .name{
+    font-weight:600;
+    font-size:15px;
+  }
+  .row-id .age{
+    display:block;
+    font-size:12px;
+    color:var(--text-muted);
+    margin-top:2px;
+  }
+
+  .readouts{
+    display:flex;
+    gap:28px;
+    flex:1;
+    min-width:220px;
+  }
+  .readout .label{
+    font-size:11px;
+    color:var(--text-muted);
+    margin-bottom:2px;
+  }
+  .readout .value{
+    font-family:var(--mono);
+    font-size:20px;
+    font-variant-numeric:tabular-nums;
+  }
+  .readout .value.stale{color:var(--text-muted);}
+
+  .set-summary{
+    font-size:13px;
+    color:var(--text-muted);
+    min-width:170px;
+  }
+  .set-summary strong{color:var(--text);font-weight:500;}
+
+  button{
+    font-family:var(--sans);
+    font-size:13px;
+    font-weight:500;
+    border-radius:7px;
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--text);
+    padding:8px 14px;
+    cursor:pointer;
+  }
+  button:hover{border-color:#454E5A;}
+  button.primary{
+    background:var(--good);
+    border-color:var(--good);
+    color:#0B1712;
+  }
+  button.primary:hover{filter:brightness(1.05);}
+  button.ghost{
+    color:var(--text-muted);
+    border-color:transparent;
+  }
+
+  .edit-panel{
+    display:none;
+    padding:4px 18px 18px;
+    border-top:1px solid var(--border);
+  }
+  .edit-panel.open{display:block;}
+  .fields{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .field label{
+    display:block;
+    font-size:12px;
+    color:var(--text-muted);
+    margin-bottom:6px;
+  }
+  .field input{
+    width:100%;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:6px;
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:14px;
+    padding:8px 10px;
+  }
+  .field input:focus{
+    outline:none;
+    border-color:var(--good);
+  }
+  .edit-actions{
+    display:flex;
+    gap:10px;
+  }
+  .edit-status{
+    font-size:12px;
+    color:var(--text-muted);
+    margin-left:4px;
+    align-self:center;
+  }
+
+  .empty{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--text-muted);
+  }
+  .empty button{margin-top:14px;}
+
+  footer{
+    max-width:920px;
+    margin:0 auto;
+    padding:20px;
+    color:var(--text-muted);
+    font-size:12px;
+  }
+
+  @media (max-width: 600px){
+    .row-main{flex-direction:column;align-items:flex-start;}
+    .readouts{gap:24px;}
+    .set-summary{order:3;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MG Pasta — Dryer Monitor</h1>
+  <p>Live temperature and humidity across all dryers, with threshold control.</p>
+  <div class="conn" id="conn"><span class="dot" id="connDot"></span><span id="connText">Connecting…</span></div>
+</header>
+
+<main>
+  <div class="list" id="list">
+    <div class="empty">Loading dryers…</div>
+  </div>
+</main>
+
+<footer>Refreshes automatically every 15 seconds. Changes to thresholds are picked up by each board on its next poll (usually within a minute).</footer>
+
+<script>
+// ------------------------------------------------------------------
+// CONFIG — this is the only section you need to touch to point this
+// dashboard at a different Supabase project (e.g. switching from the
+// test project to production later). The anon/publishable key below
+// is safe to expose publicly: it only works within the permissions
+// granted by Row Level Security policies on the Supabase project.
+// ------------------------------------------------------------------
+const SUPABASE_URL = "https://zliaudaphqxvrewpjkvk.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsaWF1ZGFwaHF4dnJld3Bqa3ZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNDE1NTYsImV4cCI6MjEwMzkxNzU1Nn0.eLAqUxF6tCIVByk_2CLbRYq3MXZ04_EHSXJzMyhu70M";
+
+// If you'd rather list dryers in a fixed order (matching your factory
+// floor layout) instead of alphabetically, list their board_id values
+// here. Leave empty to just sort alphabetically by whatever exists in
+// the settings table.
+const PREFERRED_ORDER = [];
+// ------------------------------------------------------------------
+
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const REFRESH_MS = 15000;
+const STALE_AFTER_MS = 10 * 60 * 1000;   // amber after 10 min with no reading
+const OFFLINE_AFTER_MS = 30 * 60 * 1000; // red after 30 min with no reading
+
+const listEl = document.getElementById('list');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+
+let openEditId = null; // keep an editor open across refreshes if user is mid-edit
+
+function timeAgo(iso){
+  if(!iso) return { text: 'never reported', ms: Infinity };
+  const ms = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(ms/1000);
+  let text;
+  if (s < 60) text = s + 's ago';
+  else if (s < 3600) text = Math.floor(s/60) + 'm ago';
+  else text = Math.floor(s/3600) + 'h ago';
+  return { text, ms };
+}
+
+function statusClass(ms){
+  if (ms > OFFLINE_AFTER_MS) return 'alert';
+  if (ms > STALE_AFTER_MS) return 'warn';
+  return 'good';
+}
+
+async function fetchSettings(){
+  const { data, error } = await client
+    .from('dryer_settings')
+    .select('*');
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchLatestReadings(){
+  // Pull recent rows and reduce to the latest one per board client-side.
+  // Fine at this scale (a handful of dryers); a DB view could replace
+  // this later if the readings table grows large.
+  const { data, error } = await client
+    .from('dryer_readings')
+    .select('board_id, recorded_at, temp_c, humidity_pct')
+    .order('recorded_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+
+  const latest = {};
+  for (const row of (data || [])) {
+    if (!latest[row.board_id]) latest[row.board_id] = row;
+  }
+  return latest;
+}
+
+function sortBoards(ids){
+  return ids.sort((a, b) => {
+    const ia = PREFERRED_ORDER.indexOf(a);
+    const ib = PREFERRED_ORDER.indexOf(b);
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    return a.localeCompare(b);
+  });
+}
+
+function renderEmpty(){
+  listEl.innerHTML = `
+    <div class="empty">
+      No dryers configured yet.<br>
+      Add one to get started — this creates its settings row so it shows up here
+      and so the board has something to poll.
+      <div>
+        <input id="newBoardId" placeholder="board id, e.g. test-01"
+          style="margin-top:14px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);
+          background:var(--bg);color:var(--text);font-family:var(--mono);width:200px;">
+        <br>
+        <button class="primary" id="addBoardBtn">Add dryer</button>
+      </div>
+    </div>`;
+  document.getElementById('addBoardBtn').addEventListener('click', async () => {
+    const id = document.getElementById('newBoardId').value.trim();
+    if (!id) return;
+    await client.from('dryer_settings').insert({ board_id: id });
+    load();
+  });
+}
+
+function renderRow(id, settings, reading){
+  const { text: ageText, ms: ageMs } = timeAgo(reading ? reading.recorded_at : null);
+  const cls = statusClass(ageMs);
+  const isEditing = openEditId === id;
+
+  const tempVal = reading ? reading.temp_c.toFixed(1) + '°C' : '—';
+  const humVal = reading ? reading.humidity_pct.toFixed(1) + '%' : '—';
+
+  return `
+  <div class="row" data-id="${id}">
+    <div class="row-main">
+      <div class="row-id">
+        <span class="dot ${cls}"></span>
+        <span>
+          <span class="name">${id}</span>
+          <span class="age">${ageText}</span>
+        </span>
+      </div>
+      <div class="readouts">
+        <div class="readout">
+          <div class="label">Temperature</div>
+          <div class="value ${reading ? '' : 'stale'}">${tempVal}</div>
+        </div>
+        <div class="readout">
+          <div class="label">Humidity</div>
+          <div class="value ${reading ? '' : 'stale'}">${humVal}</div>
+        </div>
+      </div>
+      <div class="set-summary">
+        Set: <strong>${settings.set_temp}°C</strong> / <strong>${settings.set_humidity}%</strong>
+      </div>
+      <button class="ghost" data-action="toggle-edit" data-id="${id}">
+        ${isEditing ? 'Close' : 'Edit'}
+      </button>
+    </div>
+    <div class="edit-panel ${isEditing ? 'open' : ''}">
+      <div class="fields">
+        <div class="field">
+          <label>Set temperature (°C)</label>
+          <input type="number" step="0.5" data-field="set_temp" value="${settings.set_temp}">
+        </div>
+        <div class="field">
+          <label>Set humidity (%)</label>
+          <input type="number" step="0.5" data-field="set_humidity" value="${settings.set_humidity}">
+        </div>
+        <div class="field">
+          <label>Humidity @42°C limit</label>
+          <input type="number" step="0.5" data-field="set_humidity_42" value="${settings.set_humidity_42}">
+        </div>
+        <div class="field">
+          <label>Upper humidity limit</label>
+          <input type="number" step="0.5" data-field="set_humidity_upper" value="${settings.set_humidity_upper}">
+        </div>
+      </div>
+      <div class="edit-actions">
+        <button class="primary" data-action="save" data-id="${id}">Save changes</button>
+        <span class="edit-status" data-status-for="${id}"></span>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function load(){
+  try {
+    const [settingsRows, readings] = await Promise.all([
+      fetchSettings(),
+      fetchLatestReadings()
+    ]);
+
+    connDot.className = 'dot good';
+    connText.textContent = 'Connected';
+
+    if (settingsRows.length === 0){
+      renderEmpty();
+      return;
+    }
+
+    const ids = sortBoards(settingsRows.map(r => r.board_id));
+    const byId = Object.fromEntries(settingsRows.map(r => [r.board_id, r]));
+
+    listEl.innerHTML = ids.map(id => renderRow(id, byId[id], readings[id])).join('');
+    attachHandlers();
+  } catch (err) {
+    connDot.className = 'dot alert';
+    connText.textContent = 'Connection problem — retrying…';
+    console.error(err);
+  }
+}
+
+function attachHandlers(){
+  listEl.querySelectorAll('[data-action="toggle-edit"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      openEditId = (openEditId === id) ? null : id;
+      load();
+    });
+  });
+
+  listEl.querySelectorAll('[data-action="save"]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const row = listEl.querySelector(`.row[data-id="${id}"]`);
+      const statusEl = listEl.querySelector(`[data-status-for="${id}"]`);
+      const updates = {};
+      row.querySelectorAll('[data-field]').forEach(input => {
+        updates[input.dataset.field] = parseFloat(input.value);
+      });
+
+      statusEl.textContent = 'Saving…';
+      const { error } = await client
+        .from('dryer_settings')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('board_id', id);
+
+      if (error){
+        statusEl.textContent = 'Failed to save';
+        console.error(error);
+      } else {
+        statusEl.textContent = 'Saved — the board will pick this up shortly';
+        openEditId = null;
+        setTimeout(load, 900);
+      }
+    });
+  });
+}
+
+load();
+setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>
