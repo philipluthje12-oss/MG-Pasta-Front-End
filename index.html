@@ -128,6 +128,35 @@
   }
   .set-summary strong{color:var(--text);font-weight:500;}
 
+  .relays{
+    display:flex;
+    gap:14px;
+    font-size:12px;
+    color:var(--text-muted);
+  }
+  .relays .indicator{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+  }
+  .relays .bulb{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--border);
+  }
+  .relays .bulb.on{background:var(--good);}
+
+  .diagnostics{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 18px;
+    padding:0 18px 14px;
+    font-size:12px;
+    color:var(--text-muted);
+    font-family:var(--mono);
+  }
+  .diagnostics span.bad{color:var(--alert);}
+  .diagnostics span.ok{color:var(--good);}
+
   button{
     font-family:var(--sans);
     font-size:13px;
@@ -293,7 +322,7 @@ async function fetchLatestReadings(){
   // this later if the readings table grows large.
   const { data, error } = await client
     .from('dryer_readings')
-    .select('board_id, recorded_at, temp_c, humidity_pct')
+    .select('board_id, recorded_at, temp_c, humidity_pct, relay_temp, relay_moist, sensor_ok, clock_ok, boot_count, free_heap, free_space_kb, csv_lines')
     .order('recorded_at', { ascending: false })
     .limit(500);
   if (error) throw error;
@@ -332,6 +361,16 @@ function renderRow(id, settings, reading){
   const tempVal = reading ? reading.temp_c.toFixed(1) + '°C' : '—';
   const humVal = reading ? reading.humidity_pct.toFixed(1) + '%' : '—';
 
+  const diagnosticsLine = reading ? `
+    <div class="diagnostics">
+      <span class="${reading.sensor_ok === false ? 'bad' : 'ok'}">Sensor: ${reading.sensor_ok === false ? 'fail' : 'ok'}</span>
+      <span class="${reading.clock_ok === false ? 'bad' : 'ok'}">Clock: ${reading.clock_ok === false ? 'unsynced' : 'synced'}</span>
+      <span>Boot #${reading.boot_count ?? '—'}</span>
+      <span>Heap: ${reading.free_heap ? (reading.free_heap / 1024).toFixed(0) + ' KB' : '—'}</span>
+      <span>Storage free: ${reading.free_space_kb != null ? reading.free_space_kb.toFixed(0) + ' KB' : '—'}</span>
+      <span>CSV lines: ${reading.csv_lines ?? '—'}</span>
+    </div>` : '';
+
   return `
   <div class="row" data-id="${id}">
     <div class="row-main">
@@ -352,6 +391,10 @@ function renderRow(id, settings, reading){
           <div class="value ${reading ? '' : 'stale'}">${humVal}</div>
         </div>
       </div>
+      <div class="relays">
+        <span class="indicator"><span class="bulb ${reading && reading.relay_temp ? 'on' : ''}"></span>Heater</span>
+        <span class="indicator"><span class="bulb ${reading && reading.relay_moist ? 'on' : ''}"></span>Fan</span>
+      </div>
       <div class="set-summary">
         Set: <strong>${settings.set_temp}°C</strong> / <strong>${settings.set_humidity}%</strong>
       </div>
@@ -359,6 +402,7 @@ function renderRow(id, settings, reading){
         ${isEditing ? 'Close' : 'Edit'}
       </button>
     </div>
+    ${diagnosticsLine}
     <div class="edit-panel ${isEditing ? 'open' : ''}">
       <div class="fields">
         <div class="field">
