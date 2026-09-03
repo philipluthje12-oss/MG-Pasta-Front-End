@@ -317,23 +317,11 @@ function sortBoards(ids){
 function renderEmpty(){
   listEl.innerHTML = `
     <div class="empty">
-      No dryers configured yet.<br>
-      Add one to get started — this creates its settings row so it shows up here
-      and so the board has something to poll.
-      <div>
-        <input id="newBoardId" placeholder="board id, e.g. test-01"
-          style="margin-top:14px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);
-          background:var(--bg);color:var(--text);font-family:var(--mono);width:200px;">
-        <br>
-        <button class="primary" id="addBoardBtn">Add dryer</button>
-      </div>
+      No dryers found in dryer_settings yet.<br>
+      This dashboard only ever shows dryers that already exist in the database —
+      it can't create new ones. Add the dryer's row directly in the Supabase
+      SQL Editor, then refresh this page.
     </div>`;
-  document.getElementById('addBoardBtn').addEventListener('click', async () => {
-    const id = document.getElementById('newBoardId').value.trim();
-    if (!id) return;
-    await client.from('dryer_settings').insert({ board_id: id });
-    load();
-  });
 }
 
 function renderRow(id, settings, reading){
